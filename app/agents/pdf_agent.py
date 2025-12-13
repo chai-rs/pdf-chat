@@ -56,10 +56,11 @@ class PDFAgentState(TypedDict):
 # Default relevance threshold for determining if content is found
 DEFAULT_RELEVANCE_THRESHOLD = 0.7
 
-PDF_ANSWER_PROMPT = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        """You are an expert research assistant that answers questions based ONLY on the provided context from academic papers.
+PDF_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """You are an expert research assistant that answers questions based ONLY on the provided context from academic papers.
 
 Your task is to:
 1. Carefully read the context provided
@@ -71,11 +72,11 @@ IMPORTANT RULES:
 - Do NOT make up information or use external knowledge
 - Do NOT hallucinate or invent citations
 - Be precise and accurate in your citations
-- If you're uncertain, express that uncertainty"""
-    ),
-    (
-        "human",
-        """Answer the question based ONLY on the following context from academic papers.
+- If you're uncertain, express that uncertainty""",
+        ),
+        (
+            "human",
+            """Answer the question based ONLY on the following context from academic papers.
 If the answer is not in the context, say 'I could not find this information in the provided documents.'
 
 Context:
@@ -83,9 +84,10 @@ Context:
 
 Question: {question}
 
-Provide a detailed answer with citations to specific papers when possible."""
-    ),
-])
+Provide a detailed answer with citations to specific papers when possible.""",
+        ),
+    ]
+)
 
 
 class PDFAgent:
@@ -158,9 +160,7 @@ class PDFAgent:
         query = state["query"]
 
         # Search with relevance scores
-        results = self.vector_store.similarity_search_with_score(
-            query, k=self.k
-        )
+        results = self.vector_store.similarity_search_with_score(query, k=self.k)
 
         # Process results and extract documents
         retrieved_docs = []
@@ -192,10 +192,7 @@ class PDFAgent:
 
         # Calculate average relevance score
         # Note: ChromaDB returns distance scores (lower = more similar)
-        scores = [
-            doc.metadata.get("relevance_score", 1.0)
-            for doc in retrieved_docs
-        ]
+        scores = [doc.metadata.get("relevance_score", 1.0) for doc in retrieved_docs]
 
         # Check if any document meets the threshold
         # Lower distance = higher relevance
@@ -218,13 +215,17 @@ class PDFAgent:
             context_parts.append(f"{source_info}\n{doc.page_content}")
 
             # Create source citation
-            sources.append(Source(
-                filename=doc.metadata.get("source", "Unknown"),
-                page=doc.metadata.get("page", 0),
-                chunk_index=doc.metadata.get("chunk_index", 0),
-                relevance_score=1.0 - score,  # Convert distance to similarity
-                snippet=doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
-            ))
+            sources.append(
+                Source(
+                    filename=doc.metadata.get("source", "Unknown"),
+                    page=doc.metadata.get("page", 0),
+                    chunk_index=doc.metadata.get("chunk_index", 0),
+                    relevance_score=1.0 - score,  # Convert distance to similarity
+                    snippet=doc.page_content[:200] + "..."
+                    if len(doc.page_content) > 200
+                    else doc.page_content,
+                )
+            )
 
         context = "\n\n---\n\n".join(context_parts)
 
@@ -262,10 +263,12 @@ class PDFAgent:
 
         chain = PDF_ANSWER_PROMPT | self.llm
 
-        response = chain.invoke({
-            "context": context,
-            "question": query,
-        })
+        response = chain.invoke(
+            {
+                "context": context,
+                "question": query,
+            }
+        )
 
         return {"answer": response.content}
 
@@ -280,8 +283,8 @@ class PDFAgent:
         """
         return {
             "answer": "I could not find this information in the provided documents. "
-                      "The query may require information not present in the indexed PDFs, "
-                      "or you may want to try rephrasing your question.",
+            "The query may require information not present in the indexed PDFs, "
+            "or you may want to try rephrasing your question.",
             "found_in_pdfs": False,
         }
 

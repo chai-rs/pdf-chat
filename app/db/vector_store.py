@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings

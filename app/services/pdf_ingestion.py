@@ -80,11 +80,13 @@ class PDFIngestionService:
         # Add file metadata
         file_hash = self._compute_file_hash(file_path)
         for doc in documents:
-            doc.metadata.update({
-                "source": str(file_path),
-                "filename": file_path.name,
-                "file_hash": file_hash,
-            })
+            doc.metadata.update(
+                {
+                    "source": str(file_path),
+                    "filename": file_path.name,
+                    "file_hash": file_hash,
+                }
+            )
             if metadata:
                 doc.metadata.update(metadata)
 

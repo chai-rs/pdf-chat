@@ -30,9 +30,7 @@ class WebAgentResult(BaseModel):
 
     answer: str = Field(description="The synthesized answer from web search")
     sources: list[WebSource] = Field(default_factory=list, description="Source URLs")
-    found_results: bool = Field(
-        default=True, description="Whether relevant web results were found"
-    )
+    found_results: bool = Field(default=True, description="Whether relevant web results were found")
 
 
 class WebAgentState(TypedDict):
@@ -47,10 +45,11 @@ class WebAgentState(TypedDict):
     found_results: bool
 
 
-WEB_ANSWER_PROMPT = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        """You are a helpful research assistant that synthesizes information from web search results.
+WEB_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """You are a helpful research assistant that synthesizes information from web search results.
 
 Your task is to:
 1. Carefully read the web search results provided
@@ -63,20 +62,21 @@ IMPORTANT RULES:
 - Always cite sources with their URLs
 - If the search results don't contain relevant information, say so clearly
 - Synthesize information from multiple sources when possible
-- Be concise but thorough"""
-    ),
-    (
-        "human",
-        """Based on these web search results, answer the user's question.
+- Be concise but thorough""",
+        ),
+        (
+            "human",
+            """Based on these web search results, answer the user's question.
 
 Search Results:
 {results}
 
 Question: {question}
 
-Provide a helpful answer and cite your sources with URLs."""
-    ),
-])
+Provide a helpful answer and cite your sources with URLs.""",
+        ),
+    ]
+)
 
 
 class WebAgent:
@@ -172,10 +172,7 @@ class WebAgent:
             }
 
         # Check if any results have meaningful content
-        has_relevant = any(
-            result.snippet and len(result.snippet) > 20
-            for result in search_results
-        )
+        has_relevant = any(result.snippet and len(result.snippet) > 20 for result in search_results)
 
         # Format results for LLM
         formatted_results = self.search_service.format_results_for_llm(
@@ -187,7 +184,9 @@ class WebAgent:
             WebSource(
                 title=result.title,
                 url=result.url,
-                snippet=result.snippet[:200] + "..." if len(result.snippet) > 200 else result.snippet,
+                snippet=result.snippet[:200] + "..."
+                if len(result.snippet) > 200
+                else result.snippet,
                 relevance_score=result.relevance_score,
             )
             for result in search_results
@@ -227,10 +226,12 @@ class WebAgent:
 
         chain = WEB_ANSWER_PROMPT | self.llm
 
-        response = chain.invoke({
-            "results": formatted_results,
-            "question": query,
-        })
+        response = chain.invoke(
+            {
+                "results": formatted_results,
+                "question": query,
+            }
+        )
 
         return {"answer": response.content}
 
@@ -245,9 +246,9 @@ class WebAgent:
         """
         return {
             "answer": "I couldn't find relevant information from web search for your query. "
-                      "The search may not have returned results, or the query might need "
-                      "to be rephrased. Please try a different search term or ask "
-                      "a more specific question.",
+            "The search may not have returned results, or the query might need "
+            "to be rephrased. Please try a different search term or ask "
+            "a more specific question.",
             "found_results": False,
         }
 

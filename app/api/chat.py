@@ -1,141 +1,162 @@
 """Chat API routes."""
 
-import uuid
+import logging
+from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field
 
-from app.agents.clarification_agent import create_clarification_agent
-from app.agents.rag_agent import create_rag_graph
-from app.core.dependencies import VectorStoreDep, WebSearchDep
-from app.db.session_memory import session_memory
-from app.models.schemas import ChatRequest, ChatResponse
-
-router = APIRouter(prefix="/chat", tags=["Chat"])
+from app.agents.orchestrator import Orchestrator
+from app.core.dependencies import VectorStoreDep
+from app.db import memory as session_memory
 
 
-@router.post("", response_model=ChatResponse)
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["Chat"])
+
+
+# --- Request/Response Models ---
+
+
+class ChatRequest(BaseModel):
+    """Chat request model."""
+
+    question: str = Field(..., description="User question to ask")
+    session_id: str | None = Field(
+        default=None, description="Session ID for conversation continuity"
+    )
+
+
+class SourceInfo(BaseModel):
+    """Source information from retrieval."""
+
+    content: str = Field(description="Content snippet from source")
+    source_type: str = Field(description="Type of source (pdf/web)")
+    metadata: dict = Field(default_factory=dict, description="Source metadata")
+
+
+class ChatResponse(BaseModel):
+    """Chat response model."""
+
+    answer: str = Field(description="AI-generated answer")
+    sources: list[SourceInfo] = Field(
+        default_factory=list, description="Sources used for the answer"
+    )
+    agent_used: str = Field(description="Agent that handled the request")
+    session_id: str = Field(description="Session ID for this conversation")
+    needs_clarification: bool = Field(default=False, description="Whether clarification is needed")
+    clarification_question: str | None = Field(
+        default=None, description="Clarification question if needed"
+    )
+
+
+# --- Dependency ---
+
+
+def get_orchestrator() -> Orchestrator:
+    """Get orchestrator instance."""
+    return Orchestrator()
+
+
+# --- Endpoints ---
+
+
+@router.post("", response_model=ChatResponse, status_code=status.HTTP_200_OK)
 async def chat(
     request: ChatRequest,
     vector_store: VectorStoreDep,
-    web_search: WebSearchDep,
 ) -> ChatResponse:
     """Chat with the PDF documents.
 
-    Args:
-        request: Chat request with message and options
-        vector_store: Injected vector store
-        web_search: Injected web search service
+    This endpoint processes user questions using the orchestrator which:
+    1. Checks if clarification is needed
+    2. Routes to appropriate agent (PDF, Web, or Hybrid)
+    3. Synthesizes an answer from retrieved content
 
-    Returns:
-        Chat response with AI answer and sources
+    Auto-creates a session if session_id is not provided.
     """
-    # Get or create session ID
-    session_id = request.session_id or str(uuid.uuid4())
+    # Generate session ID if not provided
+    session_id = request.session_id or str(uuid4())
 
-    # Get conversation history
-    messages = session_memory.get_recent_messages(session_id, n=10)
+    # Get chat history for context
+    chat_history = session_memory.get_history(session_id)
+
+    logger.info(
+        f"Processing chat request - session: {session_id}, history_length: {len(chat_history)}"
+    )
 
     try:
-        # Check if clarification is needed
-        clarification_agent = create_clarification_agent()
-        clarification_result = await clarification_agent.arun(
-            query=request.message,
-            chat_history=messages,
+        # Create and run orchestrator
+        orchestrator = get_orchestrator()
+        result = await orchestrator.arun(
+            question=request.question,
+            session_id=session_id,
+            chat_history=chat_history,
         )
 
-        if clarification_result.needs_clarification:
-            # Return clarification request without processing the query
+        # Check if clarification is needed
+        if result.get("needs_clarification", False):
+            logger.info(f"Clarification needed for session {session_id}")
             return ChatResponse(
-                response=clarification_result.clarification_question or "Could you please clarify your question?",
-                session_id=session_id,
+                answer=result.get("clarification_question", "Could you clarify?"),
                 sources=[],
-                web_sources=[],
+                agent_used="clarification",
+                session_id=session_id,
                 needs_clarification=True,
-                clarification_question=clarification_result.clarification_question,
+                clarification_question=result.get("clarification_question"),
             )
 
-        # Create RAG agent
-        agent = create_rag_graph(
-            vector_store=vector_store,
-            web_search=web_search if request.use_web_search else None,
+        # Extract answer and sources
+        answer = result.get("final_answer", "I couldn't generate an answer.")
+        route = result.get("route", "unknown")
+
+        # Process sources from both PDF and web results
+        sources: list[SourceInfo] = []
+
+        # Add PDF sources
+        for pdf_result in result.get("pdf_results", []):
+            sources.append(
+                SourceInfo(
+                    content=pdf_result.get("content", "")[:300],
+                    source_type="pdf",
+                    metadata=pdf_result.get("metadata", {}),
+                )
+            )
+
+        # Add web sources
+        for web_result in result.get("web_results", []):
+            sources.append(
+                SourceInfo(
+                    content=web_result.get("content", web_result.get("snippet", ""))[:300],
+                    source_type="web",
+                    metadata={
+                        "title": web_result.get("title", ""),
+                        "url": web_result.get("url", ""),
+                    },
+                )
+            )
+
+        # Save to conversation history
+        session_memory.add_message(session_id, "human", request.question)
+        session_memory.add_message(session_id, "ai", answer)
+
+        logger.info(
+            f"Chat completed - session: {session_id}, route: {route}, sources: {len(sources)}"
         )
-
-        # Run the agent
-        result = await agent.arun(
-            query=request.message,
-            messages=messages,
-            use_web_search=request.use_web_search,
-        )
-
-        # Save messages to session
-        session_memory.add_human_message(session_id, request.message)
-        session_memory.add_ai_message(session_id, result["response"])
-
-        # Format sources
-        sources = [
-            {
-                "content": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
-                "metadata": doc.metadata,
-            }
-            for doc in result.get("documents", [])
-        ]
-
-        web_sources = []
-        for r in result.get("web_results", []):
-            if isinstance(r, dict):
-                web_sources.append({
-                    "title": r.get("title", ""),
-                    "url": r.get("url", ""),
-                    "content": r.get("content", r.get("snippet", ""))[:200],
-                })
-            else:
-                # SearchResult Pydantic model
-                web_sources.append({
-                    "title": r.title,
-                    "url": r.url,
-                    "content": r.snippet[:200] if r.snippet else "",
-                })
 
         return ChatResponse(
-            response=result["response"],
-            session_id=session_id,
+            answer=answer,
             sources=sources,
-            web_sources=web_sources,
+            agent_used=route,
+            session_id=session_id,
             needs_clarification=False,
             clarification_question=None,
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/session/{session_id}")
-async def clear_session(session_id: str) -> dict:
-    """Clear a chat session.
-
-    Args:
-        session_id: Session ID to clear
-
-    Returns:
-        Success message
-    """
-    session_memory.clear_session(session_id)
-    return {"message": f"Session {session_id} cleared"}
-
-
-@router.get("/session/{session_id}")
-async def get_session(session_id: str) -> dict:
-    """Get session history.
-
-    Args:
-        session_id: Session ID
-
-    Returns:
-        Session messages
-    """
-    messages = session_memory.to_dict(session_id)
-    return {
-        "session_id": session_id,
-        "message_count": len(messages),
-        "messages": messages,
-    }
+        logger.exception(f"Error processing chat request: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process chat request: {str(e)}",
+        )

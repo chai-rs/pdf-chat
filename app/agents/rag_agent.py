@@ -78,9 +78,7 @@ class RAGAgent:
     def _retrieve_documents(self, state: AgentState) -> dict:
         """Retrieve relevant documents from vector store."""
         query = state["query"]
-        documents = self.vector_store.similarity_search(
-            query, k=settings.top_k_results
-        )
+        documents = self.vector_store.similarity_search(query, k=settings.top_k_results)
         return {"documents": documents}
 
     def _should_web_search(self, state: AgentState) -> str:
@@ -104,7 +102,7 @@ class RAGAgent:
         """Generate response using retrieved context."""
         # Build context from documents
         doc_context = "\n\n".join(
-            f"[Document {i+1}]:\n{doc.page_content}"
+            f"[Document {i + 1}]:\n{doc.page_content}"
             for i, doc in enumerate(state.get("documents", []))
         )
 
@@ -124,10 +122,11 @@ class RAGAgent:
             web_context = "\n\n[Web Search Results]:\n" + "\n".join(web_parts)
 
         # Build prompt
-        prompt = ChatPromptTemplate.from_messages([
-            (
-                "system",
-                """You are a helpful assistant that answers questions based on the provided context.
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """You are a helpful assistant that answers questions based on the provided context.
 Use the document context and web search results (if available) to answer the user's question.
 If you cannot find the answer in the context, say so clearly.
 Always cite your sources when possible.
@@ -135,17 +134,20 @@ Always cite your sources when possible.
 Context:
 {context}
 {web_context}""",
-            ),
-            ("human", "{query}"),
-        ])
+                ),
+                ("human", "{query}"),
+            ]
+        )
 
         # Generate response
         chain = prompt | self.llm
-        response = chain.invoke({
-            "context": doc_context or "No relevant documents found.",
-            "web_context": web_context,
-            "query": state["query"],
-        })
+        response = chain.invoke(
+            {
+                "context": doc_context or "No relevant documents found.",
+                "web_context": web_context,
+                "query": state["query"],
+            }
+        )
 
         return {
             "response": response.content,

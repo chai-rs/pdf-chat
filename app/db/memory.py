@@ -104,7 +104,9 @@ def add_message(session_id: str | None, role: str, content: str) -> str:
         elif role_lower in ("ai", "assistant"):
             history.add_message(AIMessage(content=content))
         else:
-            raise ValueError(f"Unknown role: {role}. Expected 'human', 'user', 'ai', or 'assistant'")
+            raise ValueError(
+                f"Unknown role: {role}. Expected 'human', 'user', 'ai', or 'assistant'"
+            )
 
         # Truncate to prevent context overflow
         _truncate_history(history)

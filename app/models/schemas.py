@@ -36,7 +36,9 @@ class ChatRequest(BaseModel):
 
     message: str = Field(description="User message/question")
     session_id: str | None = Field(default=None, description="Session ID for conversation history")
-    use_web_search: bool = Field(default=False, description="Enable web search for additional context")
+    use_web_search: bool = Field(
+        default=False, description="Enable web search for additional context"
+    )
 
 
 class ChatResponse(BaseModel):
@@ -45,9 +47,15 @@ class ChatResponse(BaseModel):
     response: str = Field(description="AI response")
     session_id: str = Field(description="Session ID for this conversation")
     sources: list[DocumentSource] = Field(default_factory=list, description="Source documents used")
-    web_sources: list[WebSource] = Field(default_factory=list, description="Web search sources used")
-    needs_clarification: bool = Field(default=False, description="Whether the query needs clarification")
-    clarification_question: str | None = Field(default=None, description="Clarification question if needed")
+    web_sources: list[WebSource] = Field(
+        default_factory=list, description="Web search sources used"
+    )
+    needs_clarification: bool = Field(
+        default=False, description="Whether the query needs clarification"
+    )
+    clarification_question: str | None = Field(
+        default=None, description="Clarification question if needed"
+    )
 
 
 class ClearMemoryRequest(BaseModel):

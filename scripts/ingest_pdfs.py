@@ -69,9 +69,7 @@ def ingest_pdfs(pdf_paths: list[Path], collection_name: str = "pdf_documents") -
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Ingest PDF files into the vector store"
-    )
+    parser = argparse.ArgumentParser(description="Ingest PDF files into the vector store")
     parser.add_argument(
         "--pdf-dir",
         type=Path,

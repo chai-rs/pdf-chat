@@ -19,18 +19,12 @@ from app.core.config import settings
 class ClarificationResult(BaseModel):
     """Result of clarification analysis."""
 
-    needs_clarification: bool = Field(
-        description="Whether the query needs clarification"
-    )
+    needs_clarification: bool = Field(description="Whether the query needs clarification")
     clarification_question: str | None = Field(
-        default=None,
-        description="Suggested clarification question if needed"
+        default=None, description="Suggested clarification question if needed"
     )
     original_query: str = Field(description="The original user query")
-    reason: str | None = Field(
-        default=None,
-        description="Reason why clarification is needed"
-    )
+    reason: str | None = Field(default=None, description="Reason why clarification is needed")
 
 
 class ClarificationState(TypedDict):
@@ -43,10 +37,11 @@ class ClarificationState(TypedDict):
     reason: str | None
 
 
-CLARIFICATION_PROMPT = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        """You are an expert at analyzing questions for ambiguity and clarity.
+CLARIFICATION_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """You are an expert at analyzing questions for ambiguity and clarity.
 Your task is to determine if a user's question is clear enough to answer accurately,
 or if it requires clarification first.
 
@@ -68,20 +63,21 @@ Respond with a JSON object in this exact format:
 }}
 
 Only mark as needing clarification if the ambiguity would significantly impact the quality
-of the response. Minor ambiguities that don't affect the core question should be ignored."""
-    ),
-    (
-        "human",
-        """Analyze if this question needs clarification.
+of the response. Minor ambiguities that don't affect the core question should be ignored.""",
+        ),
+        (
+            "human",
+            """Analyze if this question needs clarification.
 
 Chat History:
 {history}
 
 Current Question: {question}
 
-Respond with JSON only, no other text."""
-    ),
-])
+Respond with JSON only, no other text.""",
+        ),
+    ]
+)
 
 
 class ClarificationAgent:
@@ -157,10 +153,12 @@ class ClarificationAgent:
         chain = CLARIFICATION_PROMPT | self.llm
 
         try:
-            response = chain.invoke({
-                "question": query,
-                "history": history,
-            })
+            response = chain.invoke(
+                {
+                    "question": query,
+                    "history": history,
+                }
+            )
 
             # Parse JSON response
             content = response.content.strip()

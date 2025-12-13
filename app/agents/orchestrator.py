@@ -10,16 +10,16 @@ This module provides the central workflow that coordinates:
 import logging
 from typing import Literal, TypedDict
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from app.agents.clarification_agent import ClarificationAgent
-from app.agents.pdf_agent import PDFAgent, PDFAgentResult, Source
-from app.agents.router_agent import RouterAgent, RouteType
-from app.agents.web_agent import WebAgent, WebAgentResult, WebSource
+from app.agents.pdf_agent import PDFAgent
+from app.agents.router_agent import RouterAgent
+from app.agents.web_agent import WebAgent
 from app.core.config import settings
 
 
@@ -54,10 +54,11 @@ SYNTHESIZER = "synthesizer"
 REPLAN = "replan"
 
 
-SYNTHESIS_PROMPT = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        """You are a helpful research assistant that synthesizes information from multiple sources.
+SYNTHESIS_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """You are a helpful research assistant that synthesizes information from multiple sources.
 
 Your task is to:
 1. Combine information from PDF documents and web search results
@@ -70,11 +71,11 @@ Guidelines:
 - If sources disagree, acknowledge both perspectives
 - Prioritize accuracy over comprehensiveness
 - Use a clear structure (introduction, main points, conclusion if appropriate)
-- Include relevant citations inline"""
-    ),
-    (
-        "human",
-        """Based on the following research results, provide a comprehensive answer to the user's question.
+- Include relevant citations inline""",
+        ),
+        (
+            "human",
+            """Based on the following research results, provide a comprehensive answer to the user's question.
 
 Question: {question}
 
@@ -84,9 +85,10 @@ PDF Document Results:
 Web Search Results:
 {web_results}
 
-Synthesize this information into a clear, well-organized answer with proper citations."""
-    ),
-])
+Synthesize this information into a clear, well-organized answer with proper citations.""",
+        ),
+    ]
+)
 
 
 class Orchestrator:
@@ -146,7 +148,7 @@ class Orchestrator:
             {
                 CLARIFY_RESPONSE: END,
                 ROUTER: "router",
-            }
+            },
         )
 
         # Conditional edge: router -> (pdf_agent | web_agent | BOTH based on route)
@@ -157,7 +159,7 @@ class Orchestrator:
                 PDF_AGENT: "pdf_agent",
                 WEB_AGENT: "web_agent",
                 CLARIFY_RESPONSE: END,
-            }
+            },
         )
 
         # Conditional edge: pdf_agent -> (web_agent for hybrid | synthesizer | replan)
@@ -168,7 +170,7 @@ class Orchestrator:
                 WEB_AGENT: "web_agent",
                 SYNTHESIZER: "synthesizer",
                 REPLAN: "replan",
-            }
+            },
         )
 
         # Conditional edge: web_agent -> (synthesizer | replan)
@@ -178,7 +180,7 @@ class Orchestrator:
             {
                 SYNTHESIZER: "synthesizer",
                 REPLAN: "replan",
-            }
+            },
         )
 
         # replan -> router (to try alternative route)
@@ -252,27 +254,29 @@ class Orchestrator:
                 chat_history=state.get("chat_history", []),
             )
 
-            all_results.append({
-                "query": query,
-                "answer": result.answer,
-                "found_in_pdfs": result.found_in_pdfs,
-                "confidence_score": result.confidence_score,
-            })
+            all_results.append(
+                {
+                    "query": query,
+                    "answer": result.answer,
+                    "found_in_pdfs": result.found_in_pdfs,
+                    "confidence_score": result.confidence_score,
+                }
+            )
 
             # Convert Source objects to dicts
             for source in result.sources:
-                all_sources.append({
-                    "type": "pdf",
-                    "filename": source.filename,
-                    "page": source.page,
-                    "snippet": source.snippet,
-                    "relevance_score": source.relevance_score,
-                })
+                all_sources.append(
+                    {
+                        "type": "pdf",
+                        "filename": source.filename,
+                        "page": source.page,
+                        "snippet": source.snippet,
+                        "relevance_score": source.relevance_score,
+                    }
+                )
 
         # Check if retrieval was successful
-        retrieval_failed = all(
-            not r.get("found_in_pdfs", False) for r in all_results
-        )
+        retrieval_failed = all(not r.get("found_in_pdfs", False) for r in all_results)
 
         return {
             "pdf_results": all_results,
@@ -301,30 +305,34 @@ class Orchestrator:
                 chat_history=state.get("chat_history", []),
             )
 
-            all_results.append({
-                "query": query,
-                "answer": result.answer,
-                "found_results": result.found_results,
-            })
+            all_results.append(
+                {
+                    "query": query,
+                    "answer": result.answer,
+                    "found_results": result.found_results,
+                }
+            )
 
             # Convert WebSource objects to dicts
             for source in result.sources:
-                all_sources.append({
-                    "type": "web",
-                    "title": source.title,
-                    "url": source.url,
-                    "snippet": source.snippet,
-                    "relevance_score": source.relevance_score,
-                })
+                all_sources.append(
+                    {
+                        "type": "web",
+                        "title": source.title,
+                        "url": source.url,
+                        "snippet": source.snippet,
+                        "relevance_score": source.relevance_score,
+                    }
+                )
 
         # Check if retrieval was successful
         pdf_failed = state.get("retrieval_failed", False)
-        web_failed = all(
-            not r.get("found_results", False) for r in all_results
-        )
+        web_failed = all(not r.get("found_results", False) for r in all_results)
 
         # Both failed = overall retrieval failed
-        retrieval_failed = pdf_failed and web_failed if state.get("route") == "hybrid" else web_failed
+        retrieval_failed = (
+            pdf_failed and web_failed if state.get("route") == "hybrid" else web_failed
+        )
 
         return {
             "web_results": all_results,
@@ -369,17 +377,19 @@ class Orchestrator:
         if not pdf_text and not web_text:
             return {
                 "final_answer": "I couldn't find relevant information to answer your question. "
-                                "Please try rephrasing your question or providing more context."
+                "Please try rephrasing your question or providing more context."
             }
 
         chain = SYNTHESIS_PROMPT | self.llm
 
         try:
-            response = chain.invoke({
-                "question": state["question"],
-                "pdf_results": pdf_text or "(No PDF results)",
-                "web_results": web_text or "(No web results)",
-            })
+            response = chain.invoke(
+                {
+                    "question": state["question"],
+                    "pdf_results": pdf_text or "(No PDF results)",
+                    "web_results": web_text or "(No web results)",
+                }
+            )
             return {"final_answer": response.content}
         except Exception as e:
             logger.error(f"Synthesis failed: {e}")
@@ -410,7 +420,9 @@ class Orchestrator:
             # For hybrid that failed, we've exhausted options
             new_route = None
 
-        logger.info(f"Re-planning: attempt {current_attempt}, switching from {current_route} to {new_route}")
+        logger.info(
+            f"Re-planning: attempt {current_attempt}, switching from {current_route} to {new_route}"
+        )
 
         return {
             "route": new_route,
@@ -422,7 +434,9 @@ class Orchestrator:
     # Conditional edge functions
     # -------------------------------------------------------------------------
 
-    def _after_clarification_check(self, state: AgentState) -> Literal["clarify_response", "router"]:
+    def _after_clarification_check(
+        self, state: AgentState
+    ) -> Literal["clarify_response", "router"]:
         """Determine next step after clarification check.
 
         Args:
@@ -435,7 +449,9 @@ class Orchestrator:
             return CLARIFY_RESPONSE
         return ROUTER
 
-    def _after_router(self, state: AgentState) -> Literal["pdf_agent", "web_agent", "clarify_response"]:
+    def _after_router(
+        self, state: AgentState
+    ) -> Literal["pdf_agent", "web_agent", "clarify_response"]:
         """Determine next step after routing.
 
         Args:
@@ -459,9 +475,7 @@ class Orchestrator:
             # Default to clarification
             return CLARIFY_RESPONSE
 
-    def _after_pdf_agent(
-        self, state: AgentState
-    ) -> Literal["web_agent", "synthesizer", "replan"]:
+    def _after_pdf_agent(self, state: AgentState) -> Literal["web_agent", "synthesizer", "replan"]:
         """Determine next step after PDF agent.
 
         Args:
@@ -485,9 +499,7 @@ class Orchestrator:
         # Go to synthesizer
         return SYNTHESIZER
 
-    def _after_web_agent(
-        self, state: AgentState
-    ) -> Literal["synthesizer", "replan"]:
+    def _after_web_agent(self, state: AgentState) -> Literal["synthesizer", "replan"]:
         """Determine next step after web agent.
 
         Args:
@@ -534,9 +546,7 @@ class Orchestrator:
             query = result.get("query", "")
             if answer:
                 formatted_parts.append(
-                    f"### {source_type} Result {i}\n"
-                    f"**Query**: {query}\n"
-                    f"**Answer**: {answer}\n"
+                    f"### {source_type} Result {i}\n**Query**: {query}\n**Answer**: {answer}\n"
                 )
 
         return "\n".join(formatted_parts)

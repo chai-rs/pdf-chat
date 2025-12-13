@@ -26,12 +26,9 @@ class RouterResult(BaseModel):
     route: RouteType = Field(
         description="The selected route: pdf_search, web_search, hybrid, or clarify"
     )
-    reasoning: str = Field(
-        description="Step-by-step reasoning for the routing decision"
-    )
+    reasoning: str = Field(description="Step-by-step reasoning for the routing decision")
     sub_queries: list[str] = Field(
-        default_factory=list,
-        description="Sub-queries if the question needs to be broken down"
+        default_factory=list, description="Sub-queries if the question needs to be broken down"
     )
     original_query: str = Field(description="The original user query")
 
@@ -46,10 +43,11 @@ class RouterState(TypedDict):
     sub_queries: list[str]
 
 
-ROUTER_PROMPT = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        """You are an expert query router for a RAG (Retrieval Augmented Generation) system.
+ROUTER_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """You are an expert query router for a RAG (Retrieval Augmented Generation) system.
 Your task is to analyze user questions and decide the best approach for answering them.
 
 You have access to the following tools:
@@ -79,11 +77,11 @@ Respond with a JSON object in this exact format:
     "route": "pdf_search" | "web_search" | "hybrid" | "clarify",
     "reasoning": "Your step-by-step reasoning explaining why you chose this route",
     "sub_queries": ["list", "of", "sub-queries"] // empty list if no breakdown needed
-}}"""
-    ),
-    (
-        "human",
-        """Given this question and available tools, decide the best approach.
+}}""",
+        ),
+        (
+            "human",
+            """Given this question and available tools, decide the best approach.
 
 Question: {question}
 
@@ -95,9 +93,10 @@ Available tools:
 - web_search: Current internet information
 
 Think step-by-step about what information sources are needed.
-Respond in JSON only, no other text."""
-    ),
-])
+Respond in JSON only, no other text.""",
+        ),
+    ]
+)
 
 
 class RouterAgent:
@@ -196,10 +195,12 @@ class RouterAgent:
         chain = ROUTER_PROMPT | self.llm
 
         try:
-            response = chain.invoke({
-                "question": query,
-                "history": history,
-            })
+            response = chain.invoke(
+                {
+                    "question": query,
+                    "history": history,
+                }
+            )
 
             # Parse JSON response
             content = response.content.strip()
