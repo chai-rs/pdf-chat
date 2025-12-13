@@ -1,0 +1,33 @@
+[project]
+name = "chat-with-pdf"
+version = "0.1.0"
+description = "Chat with PDF RAG system using FastAPI and LangGraph"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "langchain",
+    "langchain-openai",
+    "langchain-anthropic",
+    "langchain-community",
+    "langgraph",
+    "chromadb",
+    "pypdf",
+    "python-dotenv",
+    "pydantic",
+    "pydantic-settings",
+    "httpx",
+    "tavily-python",
+    "python-multipart>=0.0.20",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "httpx", "ruff"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
