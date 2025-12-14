@@ -60,7 +60,7 @@ graph TD
 
 ```bash
 # Clone and enter the project
-cd chat-with-pdf
+cd pdf-chat
 
 # Install dependencies
 uv sync
