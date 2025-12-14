@@ -166,7 +166,7 @@ uv run python scripts/ingest_pdfs.py path/to/document.pdf
 uv run python scripts/ingest_pdfs.py doc1.pdf doc2.pdf doc3.pdf
 
 # Directory (recursive)
-uv run python scripts/ingest_pdfs.py -r path/to/pdf/directory
+uv run python scripts/ingest_pdfs.py --pdf-dir path/to/pdf/directory
 ```
 
 ### Via API
